@@ -8,3 +8,14 @@ Wildfires are becoming more frequent and severe due to climate change, threateni
 
 ![image](https://github.com/user-attachments/assets/7f811ca3-d333-4440-99cf-791df159f497)
 
+# Prerequisites
+| Library    | Version |
+|------------|---------|
+| Python     | 3.5.5   |
+| torch      | 2.3.1   |
+| torchvision| 0.18.1  |
+| kornia     | 0.7.3   |
+| numpy      | 1.26.4  |
+| matplotlib | 3.7.1   |
+| tqdm       | 4.66.5  |
+| seaborn    | 0.13.1  |
