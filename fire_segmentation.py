@@ -2,6 +2,7 @@ from multiprocessing import freeze_support
 import torch
 import torch.nn as nn
 from scipy.optimize import curve_fit
+from sympy.physics.units import time
 from torchvision import datasets, models, transforms
 import matplotlib
 from PIL import Image, ImageDraw
@@ -10,6 +11,8 @@ import sam
 matplotlib.use('TkAgg')
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+
 
 
 def imshow(inp, title=None):
@@ -133,8 +136,8 @@ def draw_sliding_windows(sliding_windows, image_path):
         input_points = np.vstack((input_points, [middle_x, middle_y]))  # Store center points
         plt.gca().add_patch(rect)  # Add rectangle to plot
 
-    plt.scatter(input_points[:, 0], input_points[:, 1], s=1, c='red')  # Draw points
-    plt.show()  # Display image with windows
+    #plt.scatter(input_points[:, 0], input_points[:, 1], s=1, c='red')  # Draw points
+    #plt.show()  # Display image with windows
 
 
 def process_matrix(matrix):
@@ -193,27 +196,31 @@ def manager_windows_predictions_and_segmentation(model, device, class_names, hor
     window_width = int(im.size[0] / horizontal_windows_amount)
     window_height = int(im.size[1] / vertical_windows_amount)
 
-    height_offset = int(window_height / 4)
-    width_offset = int(window_width / 4)
+    height_offset = (window_height / 4)
+    width_offset = (window_width / 4)
 
     windows = []
     sliding_horiz_windows = 0
     sliding_vert_windows = 0
 
     # Create sliding windows over the image
-    for i in range(0, image_width - window_width + 10, width_offset):
-        for j in range(0, image_height - window_height + 10, height_offset):
-            window = (j, i, j + window_width, i + window_height)  # Define window coordinates
+    for i in np.arange(0, image_height - window_height + 5, height_offset):
+        for j in np.arange(0, image_width - window_width + 5, width_offset):
+            window = (i, j, i + window_height, j + window_width)  # Define window coordinates
             windows.append(window)
             sliding_horiz_windows += 1
         sliding_vert_windows += 1
+
+    draw_sliding_windows(windows, image_path)
     im.show()
+
 
     fire_vector = np.zeros((sliding_vert_windows, int(sliding_horiz_windows / sliding_vert_windows)))
     i = 0
     j = 0
     found_fire = False
     # Iterate through sliding windows for predictions
+    print(windows)
     for window in windows:
         cropped_image = im.crop(window)  # Crop the window from the image
         if j < ((sliding_horiz_windows / sliding_vert_windows) - 1):
@@ -223,6 +230,7 @@ def manager_windows_predictions_and_segmentation(model, device, class_names, hor
             j = 0
 
         pred = predict_image(model, device, class_names, cropped_image)
+        # In case you want to use the EfficientNet model change pred == 'Fire' to pred != 'Fire'
         if pred == 'Fire':
             fire_vector[i][j] = 1
             found_fire = True
@@ -304,12 +312,12 @@ def main():
     model_ft = models.resnet18(weights=None)  # Load the model
     num_ftrs = model_ft.fc.in_features
     model_ft.fc = nn.Linear(num_ftrs, 2)  # Adjust the fully connected layer for 2 output classes
-    model_ft.load_state_dict(torch.load('final_params.pt', map_location=torch.device('cpu')))
+    model_ft.load_state_dict(torch.load('final_params_resnet.pt', map_location=torch.device('cpu')))
     model_ft = model_ft.to(device)
 
     horizontal_windows_amount = 6
     vertical_windows_amount = 4
-    image_path = 'fire_data\\test\\Fire\\F_1076.jpg'  # Path to the image
+    image_path = "fire_data\\train\\Fire\\F_1602.jpg"  # Path to the image
 
     im = Image.open(image_path)
     class_names = ["Fire", "Non_Fire"]
@@ -320,4 +328,9 @@ def main():
 if __name__ == '__main__':
     plot_ROC_curve()
     freeze_support()
-    main()
+    start_time = time.time()  # Record the start time
+    main()  # Call the main function
+    end_time = time.time()  # Record the end time
+
+    duration = end_time - start_time  # Calculate the duration
+    print(f"Duration: {duration} seconds")
