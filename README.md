@@ -40,6 +40,7 @@ Saved trained models can be found [here](https://drive.google.com/drive/folders/
 
 # References
 [fire dataset at Kaggle website](https://www.kaggle.com/datasets/mohnishsaiprasad/forest-fire-images)
+
 [Segment Anything code by Meta](https://github.com/facebookresearch/segment-anything)
 
 
