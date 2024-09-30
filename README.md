@@ -1,5 +1,5 @@
 # Fire_Detection_Project
-Implementation of a detection tool for fire using transfer leaning and Segment Anything Model
+Implementation of a detection tool of fire using transfer leaning and Segment Anything Model
 
 # Background
 Wildfires are becoming more frequent and severe due to climate change, threatening ecosystems and communities. Traditional methods for detecting and managing fires are often slow and inaccurate, making it hard to control fires quickly. In this project, we used Computer vision and AI to improve wildfire detection and management by applying image segmentation techniques. Using transfer learning for fire image classification and Meta’s "Segment Anything" model for fire segmentation, we achieved a 95% accuracy rate. This helps identify the most dangerous fire areas, allowing resources to be directed where they are needed most. Our approach can reduce response times and minimize the damage caused by wildfires.
