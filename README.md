@@ -20,7 +20,7 @@ Wildfires are becoming more frequent and severe due to climate change, threateni
 
 | File                        | Description                                                                                     |
 |-----------------------------|-------------------------------------------------------------------------------------------------|
-| `Fire_Classification.ipynb`  | Notebook containing fire classifier training using transfer learning with ResNet18 and EfficientNet + results and graphs. |
+| `fire_classification.ipynb`  | Notebook containing fire classifier training using transfer learning with ResNet18 and EfficientNet + results and graphs. |
 | `sam.py`                     | Implementation of the Segment Anything Model (SAM) by Meta, adapted for fire segmentation.      |
 | `fire_segmentation.py`       | Script to segment fire using the fire classifier and SAM model.                                 |
 
