@@ -7,6 +7,8 @@ from torchvision import datasets, models, transforms
 import matplotlib
 from PIL import Image, ImageDraw
 import sam
+import cv2
+import numpy as np
 
 matplotlib.use('TkAgg')
 import numpy as np
@@ -244,37 +246,6 @@ def manager_windows_predictions_and_segmentation(model, device, class_names, hor
     sam.segment(fire_vector_new, im, windows)  # Call segmentation method
     return
 
-
-def plot_ROC_curve():
-    """
-       Plot the Receiver Operating Characteristic (ROC) curve and calculate the Area Under the Curve (AUC).
-
-       The function uses pre-defined false positive rates (FPR) and true positive rates (TPR)
-       to generate the ROC curve, fit a logarithmic model, and display the AUC value.
-
-       Returns:
-           None
-       """
-    # Data provided
-    fpr = [0.001, 1, 0.01, 0.01, 0.004975124, 0.035211268, 0.001237624, 0.01,
-           0.269662921, 0.01, 0.01, 0.185185185, 0.213649852, 0.01, 0.01,
-           0.108108108, 0.01, 0.342465753, 0.099255583, 0.004054739, 0.027657736,
-           0.010840108]
-
-    tpr = [0.001, 1, 0.94095941, 0.8, 0.777777778, 0.964912281, 0.963855422, 0.9375,
-           1, 0.998573466, 0.95890411, 0.968992248, 0.941080196, 0.961538462,
-           0.833333333, 0.97826087, 0.917431193, 0.942028986, 0.992015968, 1, 0.375,
-           0.882352941]
-
-    # Add points (0,0) and (1,1) explicitly
-    fpr = [0] + fpr + [1]
-    tpr = [0] + tpr + [1]
-
-    # Sort FPR and TPR values for correct ROC curve plotting
-    sorted_indices = np.argsort(fpr)
-    fpr_sorted = np.array(fpr)[sorted_indices]
-    tpr_sorted = np.array(tpr)[sorted_indices]
-
     # Define a logarithmic function with interpolation for (0,0)
     def log_func_constrained(x, a):
         return np.where(x == 0, 0, a * np.log(x + 1e-6) + (1 - a * np.log(1 + 1e-6)))
@@ -317,7 +288,101 @@ def main():
 
     horizontal_windows_amount = 6
     vertical_windows_amount = 4
-    image_path = "fire_data\\train\\Fire\\F_1602.jpg"  # Path to the image
+    image_path = "fire_data\\train\\Fire\\F_1351.jpg"  # Path to the image
+
+    im = Image.open(image_path)
+    class_names = ["Fire", "Non_Fire"]
+    manager_windows_predictions_and_segmentation(model_ft, device, class_names, horizontal_windows_amount,
+                                                 vertical_windows_amount, im, image_path)
+
+
+# Global variables
+drawing = False  # True if the mouse is pressed
+mode = True  # True for rectangle mode, False for brush mode
+ix, iy = -1, -1  # Initial coordinates
+img = None  # Initialize img globally
+ground_truth_mask = None  # Initialize ground_truth_mask globally
+
+
+def draw(event, x, y, flags, param):
+    global ix, iy, drawing, mode, img, ground_truth_mask
+
+    if img is None:  # Ensure img is not None before proceeding
+        print("Image not loaded correctly.")
+        return
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        ix, iy = x, y
+
+    elif event == cv2.EVENT_MOUSEMOVE:
+        if drawing:
+            if mode:
+                img_copy = img.copy()  # Safely create a copy if img is valid
+                cv2.rectangle(img_copy, (ix, iy), (x, y), (255, 255, 255), -1)
+                cv2.imshow('image', img_copy)
+
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        if mode:
+            cv2.rectangle(img, (ix, iy), (x, y), (255, 255, 255), -1)
+            cv2.rectangle(ground_truth_mask, (ix, iy), (x, y), 1, -1)  # Draw in mask (use 1 instead of 255)
+
+
+def create_ground_truth_mask():
+    global img, ground_truth_mask  # Declare them as global to use them inside draw()
+
+    image_path = "fire_data\\train\\Fire\\F_1351.jpg"  # Change to your image path
+    img = cv2.imread(image_path)
+
+    # Check if the image was loaded successfully
+    if img is None:
+        print(f"Error: Could not load image at {image_path}")
+        return
+
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    height, width = img.shape[:2]
+
+    # Create an empty mask
+    ground_truth_mask = np.zeros((height, width), dtype=np.uint8)
+
+    # Create a window and bind the function to window events
+    cv2.namedWindow('image')
+    cv2.setMouseCallback('image', draw)
+
+    print("Draw rectangles over the fire areas. Press 'q' to quit.")
+
+    while True:
+        cv2.imshow('image', img)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+
+    # Save the mask
+    mask_output_path = "ground_truth_masks\\ground_truth_mask_1351.png"
+    cv2.imwrite(mask_output_path, ground_truth_mask * 255)  # Save as binary mask image
+
+    # Clean up
+    cv2.destroyAllWindows()
+
+
+def main():
+    """
+    Main function to set up the model and start fire detection.
+
+    Returns:
+        None: Executes the fire detection process.
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model_ft = models.resnet18(weights=None)  # Load the model
+    num_ftrs = model_ft.fc.in_features
+    model_ft.fc = nn.Linear(num_ftrs, 2)  # Adjust the fully connected layer for 2 output classes
+    model_ft.load_state_dict(torch.load('final_params_resnet.pt', map_location=torch.device('cpu')))
+    model_ft = model_ft.to(device)
+
+    horizontal_windows_amount = 6
+    vertical_windows_amount = 4
+    image_path = "fire_data\\train\\Fire\\F_1351.jpg"  # Path to the image
 
     im = Image.open(image_path)
     class_names = ["Fire", "Non_Fire"]
@@ -326,11 +391,11 @@ def main():
 
 
 if __name__ == '__main__':
-    plot_ROC_curve()
+    create_ground_truth_mask()  # First create the ground truth mask
     freeze_support()
-    start_time = time.time()  # Record the start time
-    main()  # Call the main function
-    end_time = time.time()  # Record the end time
+    start_time = time.time()
+    main()  # Call the main function for fire detection
+    end_time = time.time()
 
     duration = end_time - start_time  # Calculate the duration
     print(f"Duration: {duration} seconds")
