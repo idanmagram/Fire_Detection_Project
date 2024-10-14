@@ -27,7 +27,7 @@ Wildfires are becoming more frequent and severe due to climate change, threateni
 # Dataset
 The [dataset](https://www.kaggle.com/datasets/mohnishsaiprasad/forest-fire-images) contains ~5000 images classified as "Fire" and "no Fire"
 
-# Fire Detection Architecture Overview
+# Fire Detection Method Overview
 
 ![image](https://github.com/user-attachments/assets/7f811ca3-d333-4440-99cf-791df159f497)
 
