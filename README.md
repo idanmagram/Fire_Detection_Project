@@ -36,7 +36,7 @@ The [dataset](https://www.kaggle.com/datasets/mohnishsaiprasad/forest-fire-image
 Saved trained models can be found [here](https://drive.google.com/drive/folders/12Cv1x6MlOM6n0uYE56zHQu-ssfLySUYf)
 
 # Results
-![image](https://github.com/user-attachments/assets/5ffb6982-cc92-45bf-9b0f-68b2dfdd2fa9)
+![image](https://github.com/user-attachments/assets/4dc44e47-98d1-4612-ab71-d368088ced22)
 
 # References
 [fire dataset at Kaggle website](https://www.kaggle.com/datasets/mohnishsaiprasad/forest-fire-images)
