@@ -1,10 +1,15 @@
+import cv2
 import numpy as np
 from PIL import Image
 import matplotlib
 from segment_anything.segment_anything import sam_model_registry, SamPredictor
+
 matplotlib.use('TkAgg')  # Use the TkAgg backend
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
+from sklearn.metrics import roc_curve, auc, jaccard_score
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def creating_mask(input_array, sliding_windows):
@@ -84,46 +89,6 @@ def show_points(coords, labels, ax, marker_size=375):
                linewidth=1.25)
 
 
-def visualize_tsne(masks, scores, image):
-    """
-       Visualize the segmentation masks using t-SNE.
-
-       Args:
-           masks (numpy.ndarray): Array of masks.
-           scores (numpy.ndarray): Corresponding scores for each mask.
-           image (numpy.ndarray): Original image to display alongside the t-SNE results.
-
-       Returns:
-           None
-       """
-    num_masks, H, W = masks.shape
-    masks_reshaped = masks.reshape(num_masks, -1)
-
-    # Determine a suitable perplexity
-    perplexity = min(5, num_masks - 1)  # Set to 5 or fewer than num_masks
-
-    # Apply t-SNE with the adjusted perplexity
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
-    masks_tsne = tsne.fit_transform(masks_reshaped)
-    plt.figure(figsize=(12, 6))
-
-    # Show the original image
-    plt.subplot(1, 2, 1)
-    plt.imshow(image)
-    plt.axis('off')
-    plt.title('Original Image', fontsize=16)
-    plt.subplot(1, 2, 2)
-    scatter = plt.scatter(masks_tsne[:, 0], masks_tsne[:, 1], c=scores, cmap='viridis', alpha=0.7)
-    plt.colorbar(scatter, label='Score')
-    plt.title('t-SNE Visualization of Segmentation Masks', fontsize=16)
-    plt.xlabel('t-SNE Component 1', fontsize=14)
-    plt.ylabel('t-SNE Component 2', fontsize=14)
-    plt.grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-
 def segment(fire_vector, image, windows):
     """
       Perform segmentation on the image based on fire detection.
@@ -158,6 +123,8 @@ def segment(fire_vector, image, windows):
         point_labels=input_labels,
         multimask_output=True,
     )
+    print(logits)
+    plot_roc_curve_for_image(logits[2])
 
     masks.shape  # (number_of_masks) x H x W
     combined_mask = np.zeros_like(masks[0], dtype=np.uint8)
@@ -173,4 +140,120 @@ def segment(fire_vector, image, windows):
         plt.axis('off')
         plt.show()
 
-    visualize_tsne(masks, scores, image)
+
+def sigmoid(x):
+    """Apply sigmoid function to logits to get probabilities."""
+    return 1 / (1 + np.exp(-x))
+
+
+def plot_roc_curve_for_image(logits):
+    """
+    Plot ROC curve based on logits and ground truth masks.
+
+    Args:
+    - logits (numpy.ndarray): The raw output from the model for each pixel.
+    """
+    # Convert logits to probabilities using sigmoid
+    probabilities = sigmoid(logits)
+    ground_truth_mask_path = "ground_truth_masks\\ground_truth_mask_1351.png"
+    ground_truth_mask = cv2.imread(ground_truth_mask_path, cv2.IMREAD_GRAYSCALE)
+    ground_truth_mask_float = ground_truth_mask.astype(np.float32)
+
+    # Normalize the mask to be in the range [0, 1]
+    ground_truth_mask = ground_truth_mask_float / 255.0
+
+    # Ensure that aspect ratios are maintained before resizing
+    logits_aspect_ratio = logits.shape[1] / logits.shape[0]
+    ground_truth_aspect_ratio = ground_truth_mask.shape[1] / ground_truth_mask.shape[0]
+
+    if abs(logits_aspect_ratio - ground_truth_aspect_ratio) > 0.01:  # Threshold for mismatch
+        print("Aspect ratio mismatch detected. Consider padding instead of resizing.")
+
+    # Now resize if necessary
+    if ground_truth_mask.shape != logits.shape[:2]:
+        # Only resize if aspect ratio is the same, otherwise consider alternative solutions
+        ground_truth_mask = cv2.resize(ground_truth_mask, (logits.shape[0], logits.shape[1]),
+                                       interpolation=cv2.INTER_NEAREST)
+
+    # Flatten the probabilities and ground truth for ROC curve computation
+    probabilities_flat = probabilities.flatten()
+    ground_truth_flat = ground_truth_mask.flatten()
+
+    # Compute ROC curve and AUC
+    fpr, tpr, thresholds = roc_curve(ground_truth_flat, probabilities_flat)
+    roc_auc = auc(fpr, tpr)
+
+    # Find the best threshold using Youden's J statistic
+    best_threshold = find_best_threshold_youden(fpr, tpr, thresholds)
+    print(f"Best threshold (Youden's J): {best_threshold}")
+
+    # Plot the ROC curve
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
+    plt.scatter(fpr[np.argmax(tpr - fpr)], tpr[np.argmax(tpr - fpr)], color='red',
+                label=f'Best Threshold: {best_threshold:.2f}')
+    plt.legend(loc="lower right")
+    plt.savefig('ground_truth_masks\\roc_curve_1044.png', format='png', dpi=300)
+    plt.show()
+
+    # Binarize the predicted probabilities using the best threshold
+    predicted_binary_mask = (probabilities > best_threshold).astype(np.uint8)
+
+    # Flatten the binarized predictions and compute IoU
+    ground_truth_binary = ground_truth_mask.astype(np.uint8)
+    predicted_binary_flat = predicted_binary_mask.flatten()
+    ground_truth_binary_flat = ground_truth_binary.flatten()
+    iou_score = jaccard_score(ground_truth_binary_flat, predicted_binary_flat)
+    print(f"IoU score: {iou_score:.4f}")
+
+    # Plot predicted binary mask and ground truth binary mask side-by-side
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+    # Plot the predicted binary mask
+    axes[0].imshow(predicted_binary_mask, cmap='gray')
+    axes[0].set_title('Predicted Binary Mask')
+    axes[0].axis('off')
+
+    # Plot the ground truth binary mask
+    axes[1].imshow(ground_truth_binary, cmap='gray')
+    axes[1].set_title('Ground Truth Binary Mask')
+    axes[1].axis('off')
+
+    # Save the comparison image
+    plt.savefig('ground_truth_masks\\comparison_mask_1351.png', format='png', dpi=300)
+    plt.show()
+
+    # Plot the probability heat map
+    plt.figure()
+    plt.title('Probability Heat Map')
+    plt.imshow(probabilities, cmap='jet')
+    plt.colorbar()
+    plt.axis('off')
+    plt.savefig('ground_truth_masks\\probability_heatmap_1076.png', format='png', dpi=300)
+    plt.show()
+
+
+def find_best_threshold_youden(fpr, tpr, thresholds):
+    """
+    Find the best threshold using Youden's J statistic.
+
+    Args:
+    - fpr (array): False positive rate.
+    - tpr (array): True positive rate.
+    - thresholds (array): Thresholds used to compute fpr and tpr.
+
+    Returns:
+    - best_threshold (float): The threshold that maximizes Youden's J statistic.
+    """
+    # Calculate Youden's J statistic
+    j_scores = tpr - fpr
+    best_idx = np.argmax(j_scores)  # Index of the maximum J statistic
+    best_threshold = thresholds[best_idx]
+    return best_threshold
